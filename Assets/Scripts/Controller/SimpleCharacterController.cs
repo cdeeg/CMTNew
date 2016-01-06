@@ -9,8 +9,8 @@ struct PlayerMove
 	public int moveNum;
 	public int playerId;
 
-	public Vector3 moveDire;
-	public bool toggleRange;
+	public Vector3 currentPosition;
+	public bool hasRangeEquipped;
 	public bool useWeapon;
 }
 
@@ -39,8 +39,10 @@ struct PlayerNetworkActionContainer
 	[SyncVar]int currentHealth;										// current health
 	List<PlayerNetworkActionContainer> pendingMoves;				// pending actions made by the player
 	PlayerMove predictedState;										// state of the player deduced from their previous action
+	SpawnPoint home;
 
 	int initialHealth; // TODO remove?
+	bool hasRangeWeapon = false;
 
 //	public void SetColor( Color col ) { playerColor = col; } // set player color // TODO
 
@@ -50,16 +52,39 @@ struct PlayerNetworkActionContainer
 	{
 		// get the settings (since the StartupManager object also contains the NetworkManager,
 		// we can be sure it's there
-		StartupManager myManager = FindObjectOfType<StartupManager>();
-		settings = myManager.settings;
+		settings = FindObjectOfType<StartupManager>().settings;
 
 		// set initial and current health
 		initialHealth = currentHealth = settings.health;
 
 		// get WeaponController
 		weaponController = GetComponent<WeaponController>();
-		weaponController.Initialize(weaponAnchor, myManager.GetWeaponObjectPool());
-		
+		weaponController.Initialize();
+
+		SpawnPoint[] spawners = FindObjectsOfType<SpawnPoint>();
+		if( spawners.Length == 0 )
+		{
+			Debug.LogWarning("SimpleCharacterController: OnStartClient: Can't find any spawn points in this level. Aborting...");
+			return;
+		}
+
+		home = null;
+		for( int i = 0; i < spawners.Length; ++i )
+		{
+			if( !spawners[i].HasTeamAssigned )
+			{
+				spawners[i].AssignTeam();
+				home = spawners[i];
+				break;
+			}
+		}
+
+		if( home == null )
+		{
+			Debug.LogWarning("SimpleCharacterController: OnStartClient: Couldn't find any free spawn points. Aborting...");
+			return;
+		}
+
 		// initialize controls
 		actions = PlayerActions.CreateWithDefaultBindings();
 
@@ -92,20 +117,32 @@ struct PlayerNetworkActionContainer
 
 	void SyncState ( bool init )
 	{
+		if( init && home != null )
+		{
+			transform.position = home.GetSpawnPosition();
+		}
 		Quaternion lookAt = Quaternion.identity;
 
 		PlayerMove currentState = isLocalPlayer ? predictedState : serverMove;
 
-		if( currentState.toggleRange ) weaponController.ToggleRanged();
+		// match up equipped weapon
+		if( currentState.hasRangeEquipped != weaponController.HasRangeWeaponEquipped() ) weaponController.ToggleRanged();
 		else if( currentState.useWeapon ) weaponController.UseWeapon();
 
-		transform.position += currentState.moveDire;
+//		if( currentState.hasRangeEquipped ) weaponController.HasRangeWeaponEquipped();
 
-		lookAt = Quaternion.LookRotation( Vector3.forward, Vector3.up );
-		
-		if( currentState.moveDire != Vector3.zero )
-			transform.rotation = Quaternion.Slerp( transform.rotation, lookAt, Time.deltaTime * settings.rotationSpeed );
+		if( !weaponController.HasRangeWeaponEquipped() )
+		{
+			transform.position = currentState.currentPosition;
+
+			lookAt = Quaternion.LookRotation( Vector3.forward, Vector3.up );
+			
+			// current position is not set (aka the player didn't move)? don't change look rotation
+			if( currentState.currentPosition != Vector3.zero )
+				transform.rotation = Quaternion.Slerp( transform.rotation, lookAt, Time.deltaTime * settings.rotationSpeed );
+		}
 	}
+
 	#endregion
 
 	#region Combat
@@ -141,6 +178,13 @@ struct PlayerNetworkActionContainer
 		if ( isLocalPlayer )
 		{
 			pendingMoves = new List<PlayerNetworkActionContainer>();
+			serverMove = new PlayerMove
+				{
+					moveNum = 0,
+					currentPosition = home.GetSpawnPosition(),
+					hasRangeEquipped = false,
+					useWeapon = false
+				};
 			UpdatePredictedState();
 		}
 		SyncState( true );
@@ -162,16 +206,18 @@ struct PlayerNetworkActionContainer
 			}
 			else if( actions.ToggleRanged.WasPressed )
 			{
-				pressedKey.action = PlayerNetworkAction.TOGGLE_RANGED;
+				hasRangeWeapon = !hasRangeWeapon;
+				//pressedKey.action = PlayerNetworkAction.RANGE_EQUIPPED;
+			}
+			else if( actions.Move.IsPressed && !hasRangeWeapon )
+			{
+				pressedKey.action = PlayerNetworkAction.MOVE;
+				pressedKey.moveX = actions.Move.X;
+				pressedKey.moveY = actions.Move.Y;
 			}
 			else
 			{
-				if( !weaponController.HasRangeWeaponEquipped() )
-				{
-					pressedKey.action = PlayerNetworkAction.MOVE;
-					pressedKey.moveX = actions.Move.X;
-					pressedKey.moveY = actions.Move.Y;
-				}
+				pressedKey.action = PlayerNetworkAction.NONE;
 			}
 
 			pendingMoves.Add(pressedKey);
@@ -199,14 +245,23 @@ struct PlayerNetworkActionContainer
 			// calculate move vector
 			dire.x = Time.deltaTime * settings.moveSpeed * action.moveX;
 			dire.z = Time.deltaTime * settings.moveSpeed * action.moveY;
+			
+			// get position
+			dire.x += transform.position.x;
+			dire.z += transform.position.z;
+			dire.y = transform.position.y;
+		}
+		else if( action.action == PlayerNetworkAction.NONE )
+		{
+			dire = transform.position;
 		}
 
 		// this thing will go to the server!
 		return new PlayerMove
 				{
 					moveNum = prev.moveNum + 1,
-					moveDire = dire,
-					toggleRange = action.action == PlayerNetworkAction.TOGGLE_RANGED,
+					currentPosition = dire,
+					hasRangeEquipped = hasRangeWeapon,
 					useWeapon = action.action == PlayerNetworkAction.USE_WEAPON
 				};
 	}
