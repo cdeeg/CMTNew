@@ -15,7 +15,7 @@ public class Weapon : MonoBehaviour {
 	public RangeWeaponBehaviour projectileBehaviour;
 	public int curveMultiplier = 2;
 	public RangeWeaponRefireTime shootAgainAfter;
-	
+
 	[Header("Passive Only")]
 	public GameObject visualComponent;
 	public bool hasProjectile = false;

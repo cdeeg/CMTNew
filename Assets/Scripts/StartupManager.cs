@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 
 public class StartupManager : MonoBehaviour
 {
@@ -36,6 +37,6 @@ public class StartupManager : MonoBehaviour
 		DontDestroyOnLoad(transform.gameObject);
 
 		// load real level/menu
-		Application.LoadLevel( nextScene );
+		SceneManager.LoadScene( nextScene );
 	}
 }

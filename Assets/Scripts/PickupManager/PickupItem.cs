@@ -17,7 +17,7 @@ public class PickupItem : NetworkBehaviour
 	{
 		active = true;
 		if( particles == null ) particles = GetComponent<ParticleSystem>();
-		particles.enableEmission = true;
+		if( particles.isStopped ) particles.Play(); // restart particle system if necessary
 		myWeapon = weaponIdx;
 		myManager = manager;
 	}
@@ -25,7 +25,7 @@ public class PickupItem : NetworkBehaviour
 	void OnTriggerEnter(Collider collider)
 	{
 		if( !active ) return;
-		
+
 		if( collider.gameObject.tag == "Player" )
 		{
 			SimpleCharacterController sctrl = collider.gameObject.GetComponent<SimpleCharacterController>();
@@ -34,7 +34,7 @@ public class PickupItem : NetworkBehaviour
 				active = false;
 //				sctrl.ReceivePickupWeapon( myWeapon );
 				myManager.GiveWeaponToPlayer(myWeapon);
-				particles.enableEmission = false;
+				particles.Stop(); // disable particle emission
 			}
 		}
 	}

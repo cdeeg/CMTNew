@@ -22,6 +22,8 @@ struct PlayerNetworkActionContainer
 	// additional values for two-axis sticks
 	public float moveX;
 	public float moveY;
+	public float moveZ;
+	public bool hasRange;
 }
 
 [RequireComponent(typeof(WeaponController))]
@@ -35,7 +37,7 @@ struct PlayerNetworkActionContainer
 
 	// network variables
 	[SyncVar(hook="OnServerStateChanged")] PlayerMove serverMove;	// current position (sync a if necessary)
-//	[SyncVar]Color playerColor = Color.black;						// chosen color (sync once) // TODO
+	//	[SyncVar]Color playerColor = Color.black;						// chosen color (sync once) // TODO
 	[SyncVar]int currentHealth;										// current health
 	List<PlayerNetworkActionContainer> pendingMoves;				// pending actions made by the player
 	PlayerMove predictedState;										// state of the player deduced from their previous action
@@ -44,7 +46,7 @@ struct PlayerNetworkActionContainer
 	int initialHealth; // TODO remove?
 	bool hasRangeWeapon = false;
 
-//	public void SetColor( Color col ) { playerColor = col; } // set player color // TODO
+	//	public void SetColor( Color col ) { playerColor = col; } // set player color // TODO
 
 	#region Network
 	// called when client is started, aka the player is spawned -> initialize stuff
@@ -52,14 +54,15 @@ struct PlayerNetworkActionContainer
 	{
 		// get the settings (since the StartupManager object also contains the NetworkManager,
 		// we can be sure it's there
-		settings = FindObjectOfType<StartupManager>().settings;
+		StartupManager myManager = FindObjectOfType<StartupManager>();
+		settings = myManager.settings;
 
 		// set initial and current health
 		initialHealth = currentHealth = settings.health;
 
 		// get WeaponController
 		weaponController = GetComponent<WeaponController>();
-		weaponController.Initialize();
+		weaponController.Initialize(weaponAnchor, myManager.GetWeaponObjectPool());
 
 		SpawnPoint[] spawners = FindObjectsOfType<SpawnPoint>();
 		if( spawners.Length == 0 )
@@ -67,7 +70,7 @@ struct PlayerNetworkActionContainer
 			Debug.LogWarning("SimpleCharacterController: OnStartClient: Can't find any spawn points in this level. Aborting...");
 			return;
 		}
-
+		Debug.Log("spawner "+spawners.Length);
 		home = null;
 		for( int i = 0; i < spawners.Length; ++i )
 		{
@@ -75,6 +78,7 @@ struct PlayerNetworkActionContainer
 			{
 				spawners[i].AssignTeam();
 				home = spawners[i];
+				Debug.Log("HOME IS "+home.GetHashCode()+" FOR "+GetHashCode());
 				break;
 			}
 		}
@@ -117,10 +121,6 @@ struct PlayerNetworkActionContainer
 
 	void SyncState ( bool init )
 	{
-		if( init && home != null )
-		{
-			transform.position = home.GetSpawnPosition();
-		}
 		Quaternion lookAt = Quaternion.identity;
 
 		PlayerMove currentState = isLocalPlayer ? predictedState : serverMove;
@@ -129,20 +129,17 @@ struct PlayerNetworkActionContainer
 		if( currentState.hasRangeEquipped != weaponController.HasRangeWeaponEquipped() ) weaponController.ToggleRanged();
 		else if( currentState.useWeapon ) weaponController.UseWeapon();
 
-//		if( currentState.hasRangeEquipped ) weaponController.HasRangeWeaponEquipped();
-
 		if( !weaponController.HasRangeWeaponEquipped() )
 		{
 			transform.position = currentState.currentPosition;
-
-			lookAt = Quaternion.LookRotation( Vector3.forward, Vector3.up );
-			
-			// current position is not set (aka the player didn't move)? don't change look rotation
-			if( currentState.currentPosition != Vector3.zero )
-				transform.rotation = Quaternion.Slerp( transform.rotation, lookAt, Time.deltaTime * settings.rotationSpeed );
 		}
-	}
 
+		lookAt = Quaternion.LookRotation( Vector3.forward, Vector3.up );
+
+		// current position is not set (aka the player didn't move)? don't change look rotation
+		if( currentState.currentPosition != Vector3.zero )
+			transform.rotation = Quaternion.Slerp( transform.rotation, lookAt, Time.deltaTime * settings.rotationSpeed );
+	}
 	#endregion
 
 	#region Combat
@@ -178,13 +175,14 @@ struct PlayerNetworkActionContainer
 		if ( isLocalPlayer )
 		{
 			pendingMoves = new List<PlayerNetworkActionContainer>();
+			transform.position = home.GetSpawnPosition();
 			serverMove = new PlayerMove
-				{
-					moveNum = 0,
-					currentPosition = home.GetSpawnPosition(),
-					hasRangeEquipped = false,
-					useWeapon = false
-				};
+			{
+				moveNum = 0,
+				currentPosition = home.GetSpawnPosition(),
+				hasRangeEquipped = false,
+				useWeapon = false
+			};
 			UpdatePredictedState();
 		}
 		SyncState( true );
@@ -212,13 +210,23 @@ struct PlayerNetworkActionContainer
 			else if( actions.Move.IsPressed && !hasRangeWeapon )
 			{
 				pressedKey.action = PlayerNetworkAction.MOVE;
-				pressedKey.moveX = actions.Move.X;
-				pressedKey.moveY = actions.Move.Y;
+				Vector3 dire = transform.position;
+				dire.x += Time.deltaTime * settings.moveSpeed * actions.Move.X;
+				dire.z += Time.deltaTime * settings.moveSpeed * actions.Move.Y;
+				transform.position = dire;
+				pressedKey.moveX = dire.x;
+				pressedKey.moveY = dire.z;
+				pressedKey.moveZ = dire.y;
 			}
 			else
 			{
 				pressedKey.action = PlayerNetworkAction.NONE;
+				pressedKey.moveX = transform.position.x;
+				pressedKey.moveZ = transform.position.y;
+				pressedKey.moveY = transform.position.z;
 			}
+
+			pressedKey.hasRange = hasRangeWeapon;
 
 			pendingMoves.Add(pressedKey);
 			UpdatePredictedState();
@@ -242,14 +250,12 @@ struct PlayerNetworkActionContainer
 
 		if( action.action == PlayerNetworkAction.MOVE )
 		{
-			// calculate move vector
-			dire.x = Time.deltaTime * settings.moveSpeed * action.moveX;
-			dire.z = Time.deltaTime * settings.moveSpeed * action.moveY;
-			
 			// get position
-			dire.x += transform.position.x;
-			dire.z += transform.position.z;
-			dire.y = transform.position.y;
+			dire.x = action.moveX;
+			dire.z = action.moveY;
+			dire.y = action.moveZ;
+
+			transform.position = dire;
 		}
 		else if( action.action == PlayerNetworkAction.NONE )
 		{
@@ -258,12 +264,12 @@ struct PlayerNetworkActionContainer
 
 		// this thing will go to the server!
 		return new PlayerMove
-				{
-					moveNum = prev.moveNum + 1,
-					currentPosition = dire,
-					hasRangeEquipped = hasRangeWeapon,
-					useWeapon = action.action == PlayerNetworkAction.USE_WEAPON
-				};
+		{
+			moveNum = prev.moveNum + 1,
+			currentPosition = dire,
+			hasRangeEquipped = action.hasRange,
+			useWeapon = action.action == PlayerNetworkAction.USE_WEAPON
+		};
 	}
 	#endregion
 }
