@@ -104,7 +104,6 @@ public class WeaponController : NetworkBehaviour
 
 		if( change )
 		{
-			Debug.Log("ACTIVATE RANGE");
 			currentMeleeInstance.gameObject.SetActive( false );
 			currentRangeInstance.gameObject.SetActive( true );
 		}
@@ -120,7 +119,6 @@ public class WeaponController : NetworkBehaviour
 
 		if( change )
 		{
-			Debug.Log("ACTIVATE MELEE");
 			currentRangeInstance.gameObject.SetActive( false );
 			currentMeleeInstance.gameObject.SetActive( true );
 		}
@@ -141,7 +139,6 @@ public class WeaponController : NetworkBehaviour
 			{
 				currentRangeWeapon = standardRange;
 				currentRangeInstance = standardRangeInstance;
-				//				EquipMelee();
 			}
 			else
 			{
@@ -150,6 +147,11 @@ public class WeaponController : NetworkBehaviour
 		}
 
 		return hasAmmo;
+	}
+
+	public void SpawnProjectile()
+	{
+		//
 	}
 
 	public void Initialize (Transform t, WeaponObjectPool wop)
