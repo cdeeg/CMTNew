@@ -1,111 +1,50 @@
 ﻿using UnityEngine;
 using System.Collections;
-using UnityEngine.Networking;
-using System.Collections.Generic;
-
-struct ProjectileMove
-{
-	public int moveNum;
-
-	public float posX;
-	public float posY;
-	public float posZ;
-
-	public bool impact;
-}
 	
-public class WeaponProjectile : NetworkBehaviour
+public class WeaponProjectile : MonoBehaviour
 {
 	public GameObject visualRepresentation;
 
-	[SyncVar(hook="OnServerStateChanged")] ProjectileMove serverMove;
-	ProjectileMove myMove;
-	List<Vector3> nextMoves;
-
 	ParticleSystem impactParticles;
-	bool impacting;
 	Vector3 startPosition;
 	Vector3 targetPosition;
 	float flyingSpeed;
+	bool didImpact;
+	int myWeaponId;
 
-	public void Initialize( Vector3 start, Vector3 target, float speed )
+	public int GetWeaponId() { return myWeaponId; }
+
+	public void Initialize( Vector3 start, Vector3 target, float speed, int weaponId )
 	{
+		if( visualRepresentation != null ) visualRepresentation.SetActive( true );
+
 		impactParticles = GetComponent<ParticleSystem>();
-		impactParticles.Pause();
+		if( impactParticles != null ) impactParticles.Pause();
 
 		startPosition = start;
 		targetPosition = target;
 		flyingSpeed = speed;
-	}
-
-	void OnServerStateChanged( ProjectileMove move )
-	{
-		serverMove = move;
-		if (nextMoves != null)
-		{
-			// remove moves until the move count of local and server match
-			while (nextMoves.Count > (myMove.moveNum - serverMove.moveNum))
-			{
-				nextMoves.RemoveAt( 0 );
-			}
-			// update state
-			UpdatePosition();
-		}
-	}
-
-	void UpdatePosition()
-	{
-		myMove = serverMove;
-		foreach (Vector3 action in nextMoves)
-		{
-			myMove = DoMove(myMove, action);
-		}
-	}
-
-	ProjectileMove DoMove( ProjectileMove prev, Vector3 next )
-	{
-		Vector3 dire = transform.position;
-		dire.x = prev.posX;
-		dire.y = prev.posY;
-		dire.z = prev.posZ;
-
-		return new ProjectileMove
-		{
-			moveNum = prev.moveNum + 1,
-			posX = dire.x,
-			posY = dire.y,
-			posZ = dire.z
-		};
-	}
-
-	void Synchronize()
-	{
-		ProjectileMove currentState = isLocalPlayer ? myMove : serverMove;
-
-		Vector3 pos = transform.position;
-		pos.x = currentState.posX;
-		pos.y = currentState.posY;
-		pos.z = currentState.posZ;
+		myWeaponId = weaponId;
 	}
 	
 	void Update ()
 	{
-		if( isLocalPlayer )
-		{
-			if( impacting )
-			{
-				// TODO
-			}
-			else
-			{
-				Vector3 newPos = Vector3.Lerp( startPosition, targetPosition, flyingSpeed * Time.deltaTime );
-				transform.position = newPos;
+		if( didImpact ) return;
 
-				if( Vector3.Distance( newPos, targetPosition ) < 0.1f )
-				{
-					impacting = true;
-				}
-			}
+		Vector3 newPos = Vector3.Lerp( startPosition, targetPosition, flyingSpeed * Time.deltaTime );
+		transform.position = newPos;
+
+		if( !didImpact && Vector3.Distance( newPos, targetPosition ) < 0.1f )
+		{
+			if( impactParticles != null && !impactParticles.isPlaying ) impactParticles.Play();
+			if( visualRepresentation != null ) visualRepresentation.SetActive( false );
+			didImpact = true;
 		}
+	}
+
+	public void Reset()
+	{
+		if( impactParticles != null ) impactParticles.Stop();
+		if( visualRepresentation != null ) visualRepresentation.SetActive( false );
 	}
 }

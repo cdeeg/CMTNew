@@ -7,15 +7,18 @@ public class WeaponObjectPool
 {
 	/** Holds Weapon instances. As long as they're in here, they're inactive. **/
 	List<Weapon> instances;
+	List<WeaponProjectile> projectiles;
 
 	public WeaponObjectPool()
 	{
 		instances = new List<Weapon>();
+		projectiles = new List<WeaponProjectile>();
 	}
 
 	public void Purge()
 	{
 		instances.Clear();
+		projectiles.Clear();
 	}
 
 
@@ -30,6 +33,16 @@ public class WeaponObjectPool
 		}
 	}
 
+	/** Adds a weapon's projectile to the pool and sets it inactive. */
+	public void AddProjectileToPool(WeaponProjectile proj)
+	{
+		if( projectiles != null && proj != null )
+		{
+			projectiles.Add( proj );
+			proj.gameObject.SetActive( false );
+		}
+	}
+
 	/** Returns an existing Weapon instance with the same ID if one is in the pool, else it returns null.
 	 * The weapon is also reset (ammo is full).
 	 **/
@@ -37,7 +50,7 @@ public class WeaponObjectPool
 	{
 		Weapon instance = null;
 
-		if( instances == null ) return instance;
+		if( instances == null || instances.Count == 0 ) return instance;
 
 		for( int i = 0; i < instances.Count; ++i )
 		{
@@ -51,5 +64,26 @@ public class WeaponObjectPool
 		}
 
 		return instance;
+	}
+
+	/** Returns a projectile for a specific weapon. Returns null if no existing projectile is found. */
+	public WeaponProjectile GetProjectileInstanceForWeapon( int id )
+	{
+		WeaponProjectile proj = null;
+
+		if( projectiles == null || projectiles.Count == 0 ) return proj;
+
+		for( int i = 0; i < projectiles.Count; ++i )
+		{
+			if( projectiles[id] != null && projectiles[id].GetWeaponId() == id )
+			{
+				proj = projectiles[id];		// store instance
+				projectiles.RemoveAt( id );	// remove instance from pool
+				proj.Reset();				// show visual representation and stop impact particle effect
+				return proj;
+			}
+		}
+
+		return proj;
 	}
 }

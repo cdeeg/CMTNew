@@ -131,7 +131,7 @@ public class WeaponController : NetworkBehaviour
 	 */
 	public bool UseWeapon()
 	{
-		bool hasAmmo = currentRangeWeapon.UseAmmo();
+		bool hasAmmo = currentWeapon.UseAmmo();
 
 		if( !hasAmmo )
 		{
@@ -147,11 +147,6 @@ public class WeaponController : NetworkBehaviour
 		}
 
 		return hasAmmo;
-	}
-
-	public void SpawnProjectile()
-	{
-		//
 	}
 
 	public void Initialize (Transform t, WeaponObjectPool wop)
