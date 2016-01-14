@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine.Networking;
 using InControl;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 struct PlayerMove
 {
@@ -36,6 +37,8 @@ struct PlayerNetworkActionContainer
 [NetworkSettings(channel=2)]public class SimpleCharacterController : NetworkBehaviour
 {
 	public Transform weaponAnchor;
+	public GameObject rayCastObject;
+
 	// local variables
 	PlayerActions actions;				// controls
 	PlayerCharacterSettings settings;	// character settings (from Startup Manager)
@@ -51,8 +54,10 @@ struct PlayerNetworkActionContainer
 	SpawnPoint home;
 
 	int initialHealth; // TODO remove?
-	bool hasRangeWeapon = false;
+	bool hasRangeWeapon;
+	bool isJumping;
 	Vector3 lastLookDirection;
+	Rigidbody rb;
 
 	//	public void SetColor( Color col ) { playerColor = col; } // set player color // TODO
 
@@ -68,10 +73,51 @@ struct PlayerNetworkActionContainer
 		// set initial and current health
 		initialHealth = currentHealth = settings.health;
 
+		isJumping = false;
+		hasRangeWeapon = false;
+
 		// get WeaponController
 		weaponController = GetComponent<WeaponController>();
 		weaponController.Initialize(weaponAnchor, myManager.GetWeaponObjectPool());
 
+		FindFreeSpawnPoint();
+
+		if( home == null )
+		{
+			Debug.LogWarning("SimpleCharacterController: OnStartClient: Couldn't find any free spawn points. Aborting...");
+			return;
+		}
+
+		if( rayCastObject == null )
+		{
+			Debug.Log("SimpleCharacterController: OnStartClient: Can't do ray cast; disabling jumping...");
+		}
+
+		// initialize controls
+		actions = PlayerActions.CreateWithDefaultBindings();
+
+		// TODO check what PlayerPrefs do exactly
+	}
+
+	void OnStopClient()
+	{
+		if( home != null ) home.UnassignTeam();
+		SceneManager.LoadScene("StartGame");
+	}
+
+	void OnStopHost()
+	{
+		if( home != null ) home.UnassignTeam();
+		SceneManager.LoadScene("StartGame");
+	}
+
+	void OnDisable()
+	{
+		if( home != null ) home.UnassignTeam();
+	}
+
+	void FindFreeSpawnPoint()
+	{
 		SpawnPoint[] spawners = FindObjectsOfType<SpawnPoint>();
 		if( spawners.Length == 0 )
 		{
@@ -81,24 +127,13 @@ struct PlayerNetworkActionContainer
 		home = null;
 		for( int i = 0; i < spawners.Length; ++i )
 		{
-			if( !spawners[i].HasTeamAssigned )
+			Debug.Log("SPAWNER "+spawners[i]);
+			if( spawners[i].AssignTeam() )
 			{
-				spawners[i].AssignTeam();
 				home = spawners[i];
 				break;
 			}
 		}
-
-		if( home == null )
-		{
-			Debug.LogWarning("SimpleCharacterController: OnStartClient: Couldn't find any free spawn points. Aborting...");
-			return;
-		}
-
-		// initialize controls
-		actions = PlayerActions.CreateWithDefaultBindings();
-
-		// TODO check what PlayerPrefs do exactly
 	}
 
 	void OnServerStateChanged ( PlayerMove newMove )
@@ -187,6 +222,7 @@ struct PlayerNetworkActionContainer
 			pendingMoves = new List<PlayerNetworkActionContainer>();
 			transform.position = home.GetSpawnPosition();
 			lastLookDirection = new Vector3(-2,0,-2);
+			rb = GetComponent<Rigidbody>();
 			serverMove = new PlayerMove
 			{
 				moveNum = 0,
@@ -231,7 +267,6 @@ struct PlayerNetworkActionContainer
 				pressedKey.action = PlayerNetworkAction.MOVE;
 
 				Vector3 dire = transform.position;
-
 				dire.x += Time.deltaTime * settings.moveSpeed * actions.Move.X;
 				dire.z += Time.deltaTime * settings.moveSpeed * actions.Move.Y;
 
@@ -259,6 +294,28 @@ struct PlayerNetworkActionContainer
 
 		// synchronize state with the server
 		SyncState( false );
+	}
+
+	void FixedUpdate()
+	{
+		if( isLocalPlayer && rayCastObject != null )
+		{
+			RaycastHit hitJump;
+			Physics.Raycast( new Ray( rayCastObject.transform.position, Vector3.down ), out hitJump );
+			if( hitJump.distance > Mathf.Abs(rayCastObject.transform.localPosition.y) )
+			{
+				isJumping = true;
+			}
+			else
+			{
+				isJumping = false;
+			}
+
+			if( actions.Jump.WasPressed && !isJumping )
+			{
+				rb.AddForce( settings.jumpHeight * transform.up );
+			}
+		}
 	}
 
 	[Command(channel=0)] void CmdExecute(PlayerNetworkActionContainer action)

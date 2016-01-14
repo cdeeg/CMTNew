@@ -44,12 +44,14 @@ public class PlayerCharacterSettings
 	public float moveSpeed;
 	public float ladderSpeed;
 	public float respawnDelay;
-	public float rotationSpeed;
+	public float jumpHeight;
+	public float jumpMoveSlowdown;
 
 	public PlayerCharacterSettings()
 	{
 		health = 10;
-		rotationSpeed = 3.0f;
+		jumpHeight = 3.0f;
+		jumpMoveSlowdown = 0.5f;
 	}
 }
 

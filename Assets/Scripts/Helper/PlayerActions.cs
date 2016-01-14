@@ -19,6 +19,7 @@ public class PlayerActions : PlayerActionSet
 	public PlayerAction DodoInteraction;	// pickup and throw dodd
 	public PlayerAction UseWeapon;			// use equipped weapon (fire ranged weapon, use melee weapon)
 	public PlayerAction ToggleRanged;		// equip/unequip range weapon
+	public PlayerAction Jump;				// jump
 
 	public PlayerActions()
 	{
@@ -37,6 +38,7 @@ public class PlayerActions : PlayerActionSet
 		DodoInteraction = CreatePlayerAction( "Pick up/Throw Dodo" );
 		UseWeapon = CreatePlayerAction( "Use Equipped Weapon" );
 		ToggleRanged = CreatePlayerAction( "Equip/Unequip Range Weapon" );
+		Jump = CreatePlayerAction( "Jump" );
 	}
 
 	public static PlayerActions CreateWithDefaultBindings()
@@ -76,19 +78,23 @@ public class PlayerActions : PlayerActionSet
 		playerActions.Right.AddDefaultBinding( Key.D );
 
 		// dodo
-		playerActions.DodoInteraction.AddDefaultBinding( Key.Space );
+		playerActions.DodoInteraction.AddDefaultBinding( Key.N );
 		playerActions.DodoInteraction.AddDefaultBinding( Key.O );
 		playerActions.DodoInteraction.AddDefaultBinding( InputControlType.Action1 );
 
 		// using weapon/punching
 		playerActions.UseWeapon.AddDefaultBinding( Key.P );
 		playerActions.UseWeapon.AddDefaultBinding( Key.M );
-		playerActions.UseWeapon.AddDefaultBinding( InputControlType.Action2 );
+		playerActions.UseWeapon.AddDefaultBinding( InputControlType.Action3 );
 
 		// toggle range weapon/melee weapon
 		playerActions.ToggleRanged.AddDefaultBinding( Key.R );
 		playerActions.ToggleRanged.AddDefaultBinding( Key.U );
 		playerActions.ToggleRanged.AddDefaultBinding( InputControlType.RightBumper );
+
+		// jump
+		playerActions.Jump.AddDefaultBinding( Key.Space );
+		playerActions.Jump.AddDefaultBinding( InputControlType.Action2 );
 		
 		playerActions.ListenOptions.IncludeUnknownControllers = true;
 		playerActions.ListenOptions.MaxAllowedBindings = 3;
